@@ -26,39 +26,27 @@ jobs:
       shell: powershell
       run: |
         Write-Host "Checking pre-installed Windows Kits..."
-        Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include\" -ErrorAction SilentlyContinue | Select-Object Name
+        $wdkVersions = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include\" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' }
 
-        Write-Host "`nDownloading WDK installer..."
-        $wdkUrl = "https://go.microsoft.com/fwlink/?linkid=2166289"
-        $installerPath = "$env:TEMP\wdksetup.exe"
-
-        Invoke-WebRequest -Uri $wdkUrl -OutFile $installerPath -UseBasicParsing -MaximumRetryCount 3
-
-        Write-Host "`nInstalling WDK (this will take 10-15 minutes)..."
-        $process = Start-Process -FilePath $installerPath -ArgumentList "/quiet", "/norestart", "/features", "+" -Wait -PassThru -NoNewWindow
-
-        Write-Host "Installation exit code: $($process.ExitCode)"
-
-        Write-Host "`nVerifying installation..."
-        Start-Sleep -Seconds 10
-
-        Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include\" -ErrorAction SilentlyContinue | Select-Object Name
-
-        $ntddkFiles = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include\*\km\ntddk.h" -Recurse -ErrorAction SilentlyContinue
-
-        if ($ntddkFiles) {
-          Write-Host "`nFound ntddk.h at:"
-          $ntddkFiles | ForEach-Object { Write-Host $_.FullName }
-        } else {
-          Write-Host "`nWarning: ntddk.h not found, but continuing anyway..."
-        }
-
-        # Set environment variable for WDK
-        $wdkVersions = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include\" -ErrorAction SilentlyContinue
         if ($wdkVersions) {
-          $wdkVersion = ($wdkVersions | Select-Object -First 1).Name
-          Write-Host "`nUsing WDK version: $wdkVersion"
-          echo "WindowsSDKVersion=$wdkVersion\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Found WDK versions:"
+          $wdkVersions | ForEach-Object { Write-Host "  - $($_.Name)" }
+
+          # Use the latest version
+          $latestWdk = ($wdkVersions | Sort-Object Name -Descending | Select-Object -First 1).Name
+          Write-Host "`nUsing WDK version: $latestWdk"
+
+          # Verify ntddk.h exists
+          $ntddkPath = "C:\Program Files (x86)\Windows Kits\10\Include\$latestWdk\km\ntddk.h"
+          if (Test-Path $ntddkPath) {
+            Write-Host "Verified: $ntddkPath exists"
+          } else {
+            Write-Error "ntddk.h not found at $ntddkPath"
+            exit 1
+          }
+        } else {
+          Write-Error "No WDK installation found!"
+          exit 1
         }
 
     - name: Build Solution
