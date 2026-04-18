@@ -20,27 +20,40 @@ jobs:
         submodules: recursive
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.1
+      uses: microsoft/setup-msbuild@v2
 
     - name: Install Windows Driver Kit
       shell: powershell
       run: |
-        # Download WDK 10.0.19041.685 (compatible with VS2019)
-        $wdkUrl = "https://go.microsoft.com/fwlink/?linkid=2128854"
+        Write-Host "Installing WDK and SDK..."
+
+        # Install Windows SDK first
+        choco install windows-sdk-10-version-2004-all -y
+
+        # Download and install WDK
+        $wdkUrl = "https://go.microsoft.com/fwlink/?linkid=2249371"
         $installerPath = "$env:TEMP\wdksetup.exe"
 
         Write-Host "Downloading WDK..."
-        Invoke-WebRequest -Uri $wdkUrl -OutFile $installerPath
+        Invoke-WebRequest -Uri $wdkUrl -OutFile $installerPath -UseBasicParsing
 
-        Write-Host "Installing WDK (this may take several minutes)..."
-        Start-Process -FilePath $installerPath -ArgumentList "/quiet", "/norestart" -Wait
+        Write-Host "Installing WDK (this may take 10-15 minutes)..."
+        Start-Process -FilePath $installerPath -ArgumentList "/quiet", "/norestart", "/features", "+" -Wait -NoNewWindow
 
         Write-Host "WDK installation completed"
+
+        # Verify installation
+        if (Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\*\km\ntddk.h") {
+          Write-Host "WDK installed successfully"
+        } else {
+          Write-Error "WDK installation failed - ntddk.h not found"
+          exit 1
+        }
 
     - name: Build Solution
       shell: cmd
       run: |
-        msbuild VmLoader.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+        msbuild VmLoader.sln /p:Configuration=Release /p:Platform=x64 /m /v:normal
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
