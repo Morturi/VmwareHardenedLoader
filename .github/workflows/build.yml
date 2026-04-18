@@ -52,7 +52,8 @@ jobs:
     - name: Build Solution
       shell: cmd
       run: |
-        msbuild VmLoader.sln /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=Windows10 /p:TreatWarningsAsErrors=false /p:EnableInf2cat=false /p:RunCodeAnalysis=false /m /v:normal
+        set CL=/wd4996
+        msbuild VmLoader.sln /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=Windows10 /p:EnableInf2cat=false /p:RunCodeAnalysis=false /m /v:normal
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
