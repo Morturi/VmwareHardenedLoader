@@ -1,0 +1,63 @@
+name: Build VMware Hardened Loader
+
+on:
+  push:
+    branches: [ master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2019
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.1
+
+    - name: Install Windows Driver Kit
+      shell: powershell
+      run: |
+        # Download WDK 10.0.19041.685 (compatible with VS2019)
+        $wdkUrl = "https://go.microsoft.com/fwlink/?linkid=2128854"
+        $installerPath = "$env:TEMP\wdksetup.exe"
+
+        Write-Host "Downloading WDK..."
+        Invoke-WebRequest -Uri $wdkUrl -OutFile $installerPath
+
+        Write-Host "Installing WDK (this may take several minutes)..."
+        Start-Process -FilePath $installerPath -ArgumentList "/quiet", "/norestart" -Wait
+
+        Write-Host "WDK installation completed"
+
+    - name: Build Solution
+      shell: cmd
+      run: |
+        msbuild VmLoader.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: vmloader-sys
+        path: bin/vmloader.sys
+        if-no-files-found: error
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          bin/vmloader.sys
+          bin/install.bat
+          bin/uninstall.bat
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
